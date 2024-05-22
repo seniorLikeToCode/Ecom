@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/seniorLikeToCode/Ecom/config"
 	"github.com/seniorLikeToCode/Ecom/service/auth"
 	"github.com/seniorLikeToCode/Ecom/types"
 	"github.com/seniorLikeToCode/Ecom/utils"
@@ -24,7 +25,31 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 }
 
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var payload types.LoginUserPayload
+	if err := utils.ParseJSON(r, &payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
 
+	// check if the user exit
+	u, err := h.store.GetUserByEmail(payload.Email)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("not found, invalid email or password"))
+		return
+	}
+
+	// compare password
+	if !auth.ComparePasswords(u.Password, []byte(payload.Password)) {
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("not found, invalid email or password"))
+		return
+	}
+	secret := []byte(config.Env.JWTSecret)
+	token, err := auth.CreateJWT(secret, u.ID)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
 func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
